@@ -986,18 +986,28 @@ if page == "create":
 
                 st.subheader("Step 4. Generated Palette")
 
-                cols = st.columns(len(edited_palette))
+                num_columns = 10
 
-                for i, color in enumerate(edited_palette):
-                    with cols[i]:
-                        st.color_picker(
-                            "",
-                            rgb_to_hex(color),
-                            disabled=True,
-                            key=f"process_palette{i}"
-                        )
+                for row_start in range(0, len(edited_palette), num_columns):
+                    cols = st.columns(num_columns)
 
-                        st.caption(f"Color {i + 1}")
+                    for col_idx in range(num_columns):
+                        i = row_start + col_idx
+        
+                        if i >= len(edited_palette):
+                            with cols[col_idx]:
+                                st.empty()
+                            continue
+                
+                        color = edited_palette[i]
+                
+                        with cols[col_idx]:
+                            st.color_picker(
+                                f"Color {i + 1}",
+                                rgb_to_hex(color),
+                                disabled=True,
+                                key=f"process_palette_{i}"
+                            )
 
                 st.subheader("Step 5. Grover Search")
 
