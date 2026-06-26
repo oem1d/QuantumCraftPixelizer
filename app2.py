@@ -1166,264 +1166,329 @@ elif page == "gallery":
 
 
 elif page == "about":
-    st.subheader("Info")
 
-    st.write(
+    info_tab, comment_tab = st.tabs(["Info", "Comment"])
+
+    with info_tab:
+        st.subheader("Info")
+    
+        st.write(
+            """
+            Quantum Craft Studio converts photos into craft patterns for pixel art,
+            bead art, and cross-stitch. The app uses Qiskit-based quantum feature
+            mapping to transform RGB colors into quantum features, then applies
+            clustering and Grover search to generate craft patterns.
+            """
+        )
+    
+        st.markdown("---")
+    
+        st.header("Quantum Algorithm Visualization")
+    
+        st.subheader("1. Overall Pipeline")
+    
+        st.markdown(
+            """
+            ```text
+            Uploaded Image
+                  ↓
+            RGB Pixel Values
+                  ↓
+            Quantum Feature Map
+                  ↓
+            Quantum Feature Vector
+                  ↓
+            KMeans Palette Generation
+                  ↓
+            Grover Palette Search
+                  ↓
+            Final Craft Pattern
+            ```
+            """
+        )
+    
+        st.subheader("2. Quantum Feature Map Circuit")
+    
+        sample_rgb = st.color_picker(
+            "Choose a sample RGB color",
+            "#7A50C8",
+            key="info_sample_color"
+        )
+    
+    
+    
+        sample_color = hex_to_rgb(sample_rgb)
+    
+        # Normalize RGB
+        r, g, b = np.array(sample_color) / 255.0
+    
+        st.markdown("### Rotation Angle Calculation")
+    
+        st.latex(
+            rf"""
+            R = {sample_color[0]}, \quad
+            G = {sample_color[1]}, \quad
+            B = {sample_color[2]}
+            """
+        )
+    
+        st.latex(
+            rf"""
+            \begin{{aligned}}
+            r &= \frac{{{sample_color[0]}}}{{255}} = {r:.3f} \\
+            g &= \frac{{{sample_color[1]}}}{{255}} = {g:.3f} \\
+            b &= \frac{{{sample_color[2]}}}{{255}} = {b:.3f}
+            \end{{aligned}}
+            """
+        )
+    
+        st.latex(
+            rf"""
+            \begin{{aligned}}
+            \theta_R &= \pi r = {np.pi * r:.3f}\ \text{{rad}} \\\\
+            \theta_G &= \pi g = {np.pi * g:.3f}\ \text{{rad}} \\\\
+            \theta_B &= \pi b = {np.pi * b:.3f}\ \text{{rad}}
+            \end{{aligned}}
+            """
+        )
+    
+        st.latex(
+            rf"""
+            \begin{{aligned}}
+            \phi_{{RG}} &= \pi rg = {np.pi * r * g:.3f}\ \text{{rad}} \\\\
+            \phi_{{GB}} &= \pi gb = {np.pi * g * b:.3f}\ \text{{rad}} \\\\
+            \phi_{{BR}} &= \pi br = {np.pi * b * r:.3f}\ \text{{rad}}
+            \end{{aligned}}
+            """
+        )
+    
+        st.info(
+            """
+        **How are the rotation angles determined?**
+    
+        1. Convert the RGB values (0–255) into normalized values (0–1).
+        2. Encode each normalized value into an RY rotation:
+           - Qubit 0 : π × R
+           - Qubit 1 : π × G
+           - Qubit 2 : π × B
+        3. Encode interactions between color channels using RZ rotations:
+           - π × R × G
+           - π × G × B
+           - π × B × R
         """
-        Quantum Craft Studio converts photos into craft patterns for pixel art,
-        bead art, and cross-stitch. The app uses Qiskit-based quantum feature
-        mapping to transform RGB colors into quantum features, then applies
-        clustering and Grover search to generate craft patterns.
-        """
-    )
+        )
+    
+        r, g, b = np.array(sample_color) / 255.0
+    
+        feature_qc = QuantumCircuit(3)
+    
+        feature_qc.ry(np.pi * r, 0)
+        feature_qc.ry(np.pi * g, 1)
+        feature_qc.ry(np.pi * b, 2)
+    
+        feature_qc.cx(0, 1)
+        feature_qc.cx(1, 2)
+    
+        feature_qc.rz(np.pi * r * g, 0)
+        feature_qc.rz(np.pi * g * b, 1)
+        feature_qc.rz(np.pi * b * r, 2)
+    
+        st.pyplot(feature_qc.draw(output="mpl"))
+    
+        feature_state = Statevector.from_instruction(feature_qc)
+        feature_probs = np.abs(feature_state.data) ** 2
+    
+        feature_df = pd.DataFrame({
+            "Quantum State": [format(i, "03b") for i in range(8)],
+            "Probability": feature_probs
+        })
+    
+        st.write("Quantum feature probabilities:")
+        st.dataframe(feature_df)
+    
+        st.subheader("3. Grover Search Circuit")
+    
+        num_palette_colors = st.slider(
+            "Number of palette candidates",
+            2,
+            8,
+            8,
+            key="info_grover_num_colors"
+        )
+    
+        example_palette = np.array([
+            [122, 80, 200],
+            [255, 180, 0],
+            [60, 200, 100],
+            [50, 120, 255],
+            [255, 60, 120],
+            [40, 40, 40],
+            [230, 230, 230],
+            [150, 90, 40]
+        ])
+        st.subheader("Palette Candidates")
+    
+        cols = st.columns(4)
+    
+        for i in range(num_palette_colors):
+            color = example_palette[i]
+            hex_color = rgb_to_hex(color)
+    
+            with cols[i % 4]:
+                st.color_picker(
+                    f"Color {i + 1}",
+                    value=hex_color,
+                    disabled=True,
+                    key=f"palette_demo_{i}"
+                )
+    
+                st.caption(hex_color)
+                st.caption(f"RGB {tuple(color)}")
+    
+        sample_feature = make_quantum_features(
+            np.array([sample_color])
+        )[0]
+    
+        palette_features = make_quantum_features(
+            example_palette[:num_palette_colors]
+        )
+    
+        distances = np.linalg.norm(
+            palette_features - sample_feature,
+            axis=1
+        )
+    
+        target_index = int(np.argmin(distances))
+    
+        st.info(
+            f"The closest palette color to the sample pixel is Color {target_index + 1}. "
+            "This color is used as the Grover oracle target."
+        )
+    
+        grover_qc = build_grover_circuit(
+            num_items=num_palette_colors,
+            target_index=target_index
+        )
+    
+        st.pyplot(grover_qc.draw(output="mpl"))
+    
+        grover_state = Statevector.from_instruction(grover_qc)
+        grover_probs = np.abs(grover_state.data) ** 2
+    
+        valid_probs = grover_probs[:num_palette_colors]
+    
+    
+    
+    
+    
+        grover_df = pd.DataFrame({
+            "Palette Color": [f"Color {i + 1}" for i in range(num_palette_colors)],
+            "Probability after Grover": valid_probs
+        })
+    
+        st.write("Grover output probabilities:")
+        st.dataframe(grover_df)
+    
+        st.bar_chart(
+            grover_df.set_index("Palette Color")
+        )
+    
+        selected_color = int(np.argmax(valid_probs)) + 1
+    
+        winner = example_palette[selected_color - 1]
+    
+        winner_hex = rgb_to_hex(winner)
+    
+        st.subheader("Selected Palette Color")
+    
+        winner = example_palette[selected_color - 1]
+        winner_hex = rgb_to_hex(winner)
+    
+        st.color_picker(
+            "Grover Selected Color",
+            value=winner_hex,
+            disabled=True,
+            key="winner_color"
+        )
+    
+        st.success(
+            f"Grover selected Color {selected_color}"
+        )
+    
+        st.success(
+            f"Grover search selects Color {selected_color} with the highest probability."
+        )
+    
+        st.subheader("4. How Grover Is Used in This App")
+    
+        st.write(
+            """
+            In this application, each palette color is treated as a search candidate.
+            The closest palette color to the current pixel is marked as the target state
+            by the Grover oracle. Then, the diffuser amplifies the probability of the
+            target state. Finally, the palette color with the highest probability is
+            selected as the color for that pixel.
+            """
+        )
 
-    st.markdown("---")
+        with comment_tab:
 
-    st.header("Quantum Algorithm Visualization")
+        st.subheader("Comment")
 
-    st.subheader("1. Overall Pipeline")
+        st.markdown("""
+### 앱 소개
 
-    st.markdown(
-        """
-        ```text
-        Uploaded Image
-              ↓
-        RGB Pixel Values
-              ↓
-        Quantum Feature Map
-              ↓
-        Quantum Feature Vector
-              ↓
-        KMeans Palette Generation
-              ↓
-        Grover Palette Search
-              ↓
-        Final Craft Pattern
-        ```
-        """
-    )
+Quantum Craft Studio는 양자 알고리즘을 활용한 픽셀 도안화 앱입니다.  
+사용자가 원하는 사진을 업로드하면 지정한 픽셀 크기와 색상 수에 맞추어 이미지를 픽셀화하고, 이를 픽셀아트, 비즈공예, 십자수, 보석자수, 뜨개질 등 다양한 공예 도안으로 활용할 수 있도록 제작했습니다.
 
-    st.subheader("2. Quantum Feature Map Circuit")
+---
 
-    sample_rgb = st.color_picker(
-        "Choose a sample RGB color",
-        "#7A50C8",
-        key="info_sample_color"
-    )
+### 문제 설정
 
+이 앱은 개인적인 경험에서 출발했습니다.  
+이전에 뜨개질 도안을 만들기 위해 기존 도안 앱의 픽셀화 기능을 사용한 적이 있었지만, 원본 이미지의 느낌이 잘 살아나지 않거나 색상 변환 결과가 만족스럽지 않았습니다.  
+그래서 단순 RGB 기반의 픽셀화 방식이 아니라, 색상 정보를 더 풍부하게 표현할 수 있는 양자 알고리즘을 접목한 픽셀 도안 생성 앱을 만들어보고자 했습니다.
 
+---
 
-    sample_color = hex_to_rgb(sample_rgb)
+### 양자적 접근
 
-    # Normalize RGB
-    r, g, b = np.array(sample_color) / 255.0
+이 앱에서는 RGB 색상값을 그대로 비교하는 대신, RGB 값을 양자 회로의 회전각으로 인코딩했습니다.  
+Red, Green, Blue 값을 각각 0부터 1 사이로 정규화한 뒤 RY 게이트의 회전값으로 사용했고, CNOT 게이트를 통해 큐비트 간의 상관관계를 생성했습니다.  
+또한 RZ 게이트에는 색상 채널 간의 곱을 사용하여 R-G, G-B, B-R 사이의 상호작용을 반영했습니다.
 
-    st.markdown("### Rotation Angle Calculation")
+이후 최종 상태벡터의 측정 확률을 Quantum Feature로 추출하고, 이 feature vector를 KMeans Clustering과 색상 매핑 과정에 활용했습니다.  
+자동 팔레트 생성 과정에서는 Quantum Feature 기반 KMeans로 대표 색상을 만들고, 각 픽셀이 어떤 팔레트 색상에 대응되는지는 Grover Search를 이용해 선택하도록 구성했습니다.  
+사용자가 직접 팔레트를 선택하는 경우에도 각 픽셀과 팔레트 색상 간의 Quantum Feature 거리를 계산한 뒤, Grover Search를 통해 가장 적합한 팔레트 색상을 선택합니다.
 
-    st.latex(
-        rf"""
-        R = {sample_color[0]}, \quad
-        G = {sample_color[1]}, \quad
-        B = {sample_color[2]}
-        """
-    )
+---
 
-    st.latex(
-        rf"""
-        \begin{{aligned}}
-        r &= \frac{{{sample_color[0]}}}{{255}} = {r:.3f} \\
-        g &= \frac{{{sample_color[1]}}}{{255}} = {g:.3f} \\
-        b &= \frac{{{sample_color[2]}}}{{255}} = {b:.3f}
-        \end{{aligned}}
-        """
-    )
+### 시도와 과정
 
-    st.latex(
-        rf"""
-        \begin{{aligned}}
-        \theta_R &= \pi r = {np.pi * r:.3f}\ \text{{rad}} \\\\
-        \theta_G &= \pi g = {np.pi * g:.3f}\ \text{{rad}} \\\\
-        \theta_B &= \pi b = {np.pi * b:.3f}\ \text{{rad}}
-        \end{{aligned}}
-        """
-    )
+처음에는 사용자가 픽셀 수와 색상 수만 지정하면 자동으로 픽셀화된 도안을 출력하는 앱을 구상했습니다.  
+하지만 픽셀 수를 직접 지정할 경우 원본 이미지의 가로세로 비율을 유지하기 어렵고, RGB 값을 양자 회로에 적용했을 때 색상 결과가 예상과 다르게 나타나는 문제가 있었습니다.
 
-    st.latex(
-        rf"""
-        \begin{{aligned}}
-        \phi_{{RG}} &= \pi rg = {np.pi * r * g:.3f}\ \text{{rad}} \\\\
-        \phi_{{GB}} &= \pi gb = {np.pi * g * b:.3f}\ \text{{rad}} \\\\
-        \phi_{{BR}} &= \pi br = {np.pi * b * r:.3f}\ \text{{rad}}
-        \end{{aligned}}
-        """
-    )
+이를 해결하기 위해 원본 비율에 맞는 높이 추천 기능을 추가했고, 사용자가 이미지에서 직접 색상을 선택할 수 있는 팔레트 선택 기능도 추가했습니다.  
+또한 자동 색상 선택 모드에서는 색상 수에 따라 결과물이 크게 달라지는 문제가 있었기 때문에, 여러 색상 수에 대해 MSE를 계산하고 색상 수를 추천하는 기능을 구현했습니다.
 
-    st.info(
-        """
-    **How are the rotation angles determined?**
+최종적으로 앱은 다음과 같은 흐름으로 작동하도록 구성했습니다.
 
-    1. Convert the RGB values (0–255) into normalized values (0–1).
-    2. Encode each normalized value into an RY rotation:
-       - Qubit 0 : π × R
-       - Qubit 1 : π × G
-       - Qubit 2 : π × B
-    3. Encode interactions between color channels using RZ rotations:
-       - π × R × G
-       - π × G × B
-       - π × B × R
-    """
-    )
+1. 이미지 업로드  
+2. 픽셀 크기 설정  
+3. RGB 값을 Quantum Feature로 변환  
+4. KMeans로 팔레트 생성  
+5. Grover Search로 최적 팔레트 색상 선택  
+6. 픽셀아트, 비즈아트, 십자수 스타일 도안 생성  
+7. 색상 번호표와 비즈/스티치 개수표 제공  
+8. PNG 및 CSV 파일 다운로드
 
-    r, g, b = np.array(sample_color) / 255.0
+---
 
-    feature_qc = QuantumCircuit(3)
+### 회고
 
-    feature_qc.ry(np.pi * r, 0)
-    feature_qc.ry(np.pi * g, 1)
-    feature_qc.ry(np.pi * b, 2)
+앱이 완벽하게 작동한다고 보기는 어렵지만, 처음 구상했던 방향대로 이미지가 도안으로 변환되고 양자 알고리즘의 흐름을 시각적으로 확인할 수 있다는 점이 흥미로웠습니다.  
+특히 Quantum Feature Mapping과 Grover Search가 단순한 설명에 그치지 않고 실제 앱의 색상 처리 과정에 연결되도록 구현한 점이 의미 있었습니다.
 
-    feature_qc.cx(0, 1)
-    feature_qc.cx(1, 2)
-
-    feature_qc.rz(np.pi * r * g, 0)
-    feature_qc.rz(np.pi * g * b, 1)
-    feature_qc.rz(np.pi * b * r, 2)
-
-    st.pyplot(feature_qc.draw(output="mpl"))
-
-    feature_state = Statevector.from_instruction(feature_qc)
-    feature_probs = np.abs(feature_state.data) ** 2
-
-    feature_df = pd.DataFrame({
-        "Quantum State": [format(i, "03b") for i in range(8)],
-        "Probability": feature_probs
-    })
-
-    st.write("Quantum feature probabilities:")
-    st.dataframe(feature_df)
-
-    st.subheader("3. Grover Search Circuit")
-
-    num_palette_colors = st.slider(
-        "Number of palette candidates",
-        2,
-        8,
-        8,
-        key="info_grover_num_colors"
-    )
-
-    example_palette = np.array([
-        [122, 80, 200],
-        [255, 180, 0],
-        [60, 200, 100],
-        [50, 120, 255],
-        [255, 60, 120],
-        [40, 40, 40],
-        [230, 230, 230],
-        [150, 90, 40]
-    ])
-    st.subheader("Palette Candidates")
-
-    cols = st.columns(4)
-
-    for i in range(num_palette_colors):
-        color = example_palette[i]
-        hex_color = rgb_to_hex(color)
-
-        with cols[i % 4]:
-            st.color_picker(
-                f"Color {i + 1}",
-                value=hex_color,
-                disabled=True,
-                key=f"palette_demo_{i}"
-            )
-
-            st.caption(hex_color)
-            st.caption(f"RGB {tuple(color)}")
-
-    sample_feature = make_quantum_features(
-        np.array([sample_color])
-    )[0]
-
-    palette_features = make_quantum_features(
-        example_palette[:num_palette_colors]
-    )
-
-    distances = np.linalg.norm(
-        palette_features - sample_feature,
-        axis=1
-    )
-
-    target_index = int(np.argmin(distances))
-
-    st.info(
-        f"The closest palette color to the sample pixel is Color {target_index + 1}. "
-        "This color is used as the Grover oracle target."
-    )
-
-    grover_qc = build_grover_circuit(
-        num_items=num_palette_colors,
-        target_index=target_index
-    )
-
-    st.pyplot(grover_qc.draw(output="mpl"))
-
-    grover_state = Statevector.from_instruction(grover_qc)
-    grover_probs = np.abs(grover_state.data) ** 2
-
-    valid_probs = grover_probs[:num_palette_colors]
-
-
-
-
-
-    grover_df = pd.DataFrame({
-        "Palette Color": [f"Color {i + 1}" for i in range(num_palette_colors)],
-        "Probability after Grover": valid_probs
-    })
-
-    st.write("Grover output probabilities:")
-    st.dataframe(grover_df)
-
-    st.bar_chart(
-        grover_df.set_index("Palette Color")
-    )
-
-    selected_color = int(np.argmax(valid_probs)) + 1
-
-    winner = example_palette[selected_color - 1]
-
-    winner_hex = rgb_to_hex(winner)
-
-    st.subheader("Selected Palette Color")
-
-    winner = example_palette[selected_color - 1]
-    winner_hex = rgb_to_hex(winner)
-
-    st.color_picker(
-        "Grover Selected Color",
-        value=winner_hex,
-        disabled=True,
-        key="winner_color"
-    )
-
-    st.success(
-        f"Grover selected Color {selected_color}"
-    )
-
-    st.success(
-        f"Grover search selects Color {selected_color} with the highest probability."
-    )
-
-    st.subheader("4. How Grover Is Used in This App")
-
-    st.write(
-        """
-        In this application, each palette color is treated as a search candidate.
-        The closest palette color to the current pixel is marked as the target state
-        by the Grover oracle. Then, the diffuser amplifies the probability of the
-        target state. Finally, the palette color with the highest probability is
-        selected as the color for that pixel.
-        """
-    )
-
+이번 프로젝트를 통해 앱 개발 과정에서 알고리즘의 성능뿐 아니라 사용자가 이해할 수 있는 설명, 시각화, 인터페이스 설계도 중요하다는 것을 느꼈습니다.  
+다음에는 실제 양자 하드웨어 실행, 더 정교한 색상 거리 계산, 다양한 공예별 출력 형식 등을 추가하여 더 발전된 앱을 만들어보고 싶습니다.
+""")
