@@ -1433,9 +1433,9 @@ elif page == "about":
 
         with comment_tab:
 
-        st.subheader("Comment")
-
-        st.markdown("""
+            st.subheader("Comment")
+    
+            st.markdown("""
 ### 앱 소개
 
 Quantum Craft Studio는 양자 알고리즘을 활용한 픽셀 도안화 앱입니다.  
