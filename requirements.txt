@@ -6,3 +6,4 @@ scikit-learn
 qiskit
 streamlit-image-coordinates
 matplotlib
+pylatexenc
